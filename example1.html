@@ -1,0 +1,37 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Example1</title>
+  <meta name="description" content="Example 1">
+  <meta name="author" content="Joey De Pauw">
+</head>
+
+<body>
+
+  <script src="https://d3js.org/d3.v3.min.js"></script>
+  <script src="https://d3js.org/d3-path.v1.min.js"></script>
+  <script src="https://d3js.org/d3-shape.v1.min.js"></script>
+  <script src="circular.js"></script>
+
+  <script type="text/javascript">
+
+    var body = d3.select("body");
+    circular(
+      body,
+      {"labels": ["A", "B", "C"],
+      "values": [
+          [["A"], 0.9],
+          [["B"], 0.7],
+          [["C"], 0.6],
+          [["A", "B"], 0.6]
+        ]
+      }
+    );
+
+  </script>
+
+</body>
+</html>
