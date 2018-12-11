@@ -1,82 +1,151 @@
 function circular(element, data) {
-  console.log(data)
+    const width = 800;
+    const height = 800;
 
-  const width = 500;
-  const height = 500;
-
-  const svg = element.append("svg")
-      .attr("width", width)
-      .attr("height", height)
-      .attr("viewBox", [-width / 2, -height / 2, width, height]);
-      // .attr("width", 500)
-      // .attr("height", 500);
-  var g = svg.append("g");//.attr("transform", "translate(" + svg.attr("width") / 2 + "," + svg.attr("height") / 2 + ")");
-
-  var arc = d3.arc()
-
-  var amtLabels = data.labels.length;
-  var baseAngle = 2 * Math.PI / amtLabels;
-  var minRadius = 50;
-  var maxRadius = 200;
-
-  drawInner(g, data.labels, minRadius);
-
-  // // var colors = ["orange", "blue", "green", "cyan"];
-  // var colors = d3.scale.category10();
-  //
-  // for(var index = 0;index < data.values.length;index++){
-  //   var item = data.values[index];
-  //   var color = colors(index);
-  //   var radius = minRadius + maxRadius * item[1]
-  //
-  //   var circle = arc({
-  //       startAngle: index * baseAngle,
-  //       endAngle: (index + 1) * baseAngle,
-  //       outerRadius: radius,
-  //       innerRadius: minRadius
-  //     });
-  //
-  //     var circle = g.append("path")
-  //         // .style("fill", color)
-  //         .style("fill", color)
-  //         .attr("d", circle)
-  //         .style("stroke", "#000")
-  //         .style("stroke-width", "1.5px");
-  // }
-}
+    const svg = element.append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .attr("viewBox", [-width / 2, -height / 2, width, height]);
+    const g = svg.append("g");
 
 
-function drawInner(g, labels, radius){
-    var amtLabels = labels.length;
-    var baseAngle = 2 * Math.PI / amtLabels;
-    var offset = -baseAngle / 2;
+    const minRadius = 0;
+    const labelRadius = 50;
+    const maxRadius = 400;
+    const radiusScale = d3.scale.linear()
+        .range([labelRadius, maxRadius]);
 
-    var arc = d3.arc()
-      .innerRadius(0)
-      .outerRadius(radius)
-      .startAngle(function(d, i){return offset + i * baseAngle;})
-      .endAngle(function(d, i){return offset + (i + 1) * baseAngle;});
+    calculateItemAngles(data.items);
+    calculateItemsetAngles(data.items, data.itemsets);
 
-    g.selectAll("path")
-      .data(labels)
-      .enter()
+
+    const innerArc = d3.arc()
+        .innerRadius(minRadius)
+        .outerRadius(labelRadius);
+
+    g.selectAll(".item")
+        .data(data.items)
+        .enter()
         .append("path")
         .style("fill", "white")
         .style("stroke", "#000")
         .style("stroke-width", "1.5px")
-        .attr("d", arc);
+        .attr("d", innerArc);
 
-    g.selectAll(".text")
-			.data(labels)
-		  .enter()
-      .append("text")
-          .attr("transform", function (d) {
-          return "translate(" + arc.centroid(d) + ")";
-      })
-          .attr("text-anchor", "middle")
-          .attr("fill", "white")
-          .text(function (d) {
-          return d;
-      });
 
+    const colors = d3.scale.category10();
+    // const colors = d3.interpolateBlues;
+
+    const arcs = d3.arc()
+        .innerRadius(labelRadius)
+        .outerRadius(function (d) {
+            return radiusScale(d.support);
+        });
+
+    g.selectAll(".itemset")
+        .data(data.itemsets)
+        .enter()
+        .append("path")
+        .style("fill", function (d, i) {
+            if (d.items.length === 1) {
+                return "#fff";
+            } else {
+                return colors(i);
+            }
+        })
+        .style("opacity", 0.8)
+        .style("stroke", "#000")
+        .style("stroke-width", "1.5px")
+        .attr("d", arcs);
+
+}
+
+function calculateItemAngles(items) {
+    const amtItems = items.length;
+    const baseAngle = 2 * Math.PI / amtItems;
+    const offset = -baseAngle / 2;
+
+    items.forEach(function (item, index) {
+        item.startAngle = offset + index * baseAngle;
+        item.endAngle = offset + (index + 1) * baseAngle;
+        item.midAngle = offset + (index + 0.5) * baseAngle;
+    });
+}
+
+function calculateItemsetAngles(items, itemsets) {
+    itemsets.sort(function (x, y) {
+        return d3.descending(x.support, y.support);
+    });
+
+    const itemMap = {};
+    items.forEach(function (item) {
+        itemMap[item.id] = item;
+    });
+
+    itemsets.forEach(function (set) {
+        // check length
+        console.assert([items.length, items.length - 1, 1].includes(set.items.length), "Itemsets should only contain k, k-1 and 1 itemsets.");
+
+        let setItems = [];
+        set.items.forEach(function (d) {
+            setItems.push(itemMap[d]);
+        });
+
+        if (set.items.length === 1) {
+            set.startAngle = d3.min(setItems, function (d) {
+                return d.startAngle;
+            });
+            set.endAngle = d3.max(setItems, function (d) {
+                return d.endAngle;
+            });
+        }else if(set.items.length === items.length){
+            set.startAngle = 0;
+            set.endAngle = Math.PI * 2;
+        } else {
+            let startEndItem = findStartEndItems(setItems, items);
+            let startItem = startEndItem[0];
+            let endItem = startEndItem[1];
+            set.startAngle = startItem.midAngle;
+            set.endAngle = endItem.midAngle;
+        }
+
+        // d3js does not respect start and end angle order. It just arcs from the smallest to the largest.
+        // We fix this by forcing the end angle to always be larger than the start angle (adding 2PI).
+        while(set.startAngle > set.endAngle){
+            set.endAngle += Math.PI * 2;
+        }
+    });
+}
+
+function findStartEndItems(items, allItems) {
+    const allItemIds = [];
+    for (let item of allItems) {
+        allItemIds.push(item.id)
+    }
+
+    const itemIds = [];
+    for (let item of items) {
+        itemIds.push(item.id)
+    }
+
+    function getEndItem(startItem){
+        let startIndex = allItemIds.indexOf(startItem.id);
+        for (let offset = 1; offset < items.length; offset++) {
+            let nextIndex = (startIndex + offset) % allItemIds.length;
+            let nextId = allItemIds[nextIndex];
+            if (!itemIds.includes(nextId)) {
+                return null;
+            }
+        }
+        return allItems[(startIndex + items.length - 1) % allItems.length];
+    }
+
+    for (let startItem of items) {
+        let endItem = getEndItem(startItem);
+        if(endItem != null){
+            return [startItem, endItem];
+        }
+    }
+
+    return null;
 }
