@@ -1,3 +1,4 @@
+
 function circular(element, data) {
     const width = 800;
     const height = 800;
@@ -10,7 +11,7 @@ function circular(element, data) {
 
 
     const minRadius = 0;
-    const labelRadius = 50;
+    const labelRadius = 100;
     const maxRadius = 400;
     const radiusScale = d3.scale.linear()
         .range([labelRadius, maxRadius]);
@@ -56,7 +57,19 @@ function circular(element, data) {
         .style("opacity", 0.8)
         .style("stroke", "#000")
         .style("stroke-width", "1.5px")
-        .attr("d", arcs);
+        .attr("d", arcs)
+        .on("mouseover",function(){
+          console.log("Hover", this);
+          var sel = d3.select(this);
+          sel.style("opacity", 1);
+          sel.style("stroke-width", "2px");
+        })
+        .on("mouseout",function(){
+          console.log("Hover", this);
+          var sel = d3.select(this);
+          sel.style("opacity", 0.8);
+          sel.style("stroke-width", "1.5px");
+        });
 
 }
 
