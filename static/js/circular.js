@@ -3,6 +3,8 @@ function circular(element, data) {
     const width = 800;
     const height = 800;
 
+    const id = Math.random() % 100000;
+
     const svg = element.append("svg")
         .attr("width", width)
         .attr("height", height)
@@ -24,14 +26,50 @@ function circular(element, data) {
         .innerRadius(minRadius)
         .outerRadius(labelRadius);
 
-    g.selectAll(".item")
+    let nodes = g.selectAll(".item")
         .data(data.items)
         .enter()
         .append("path")
         .style("fill", "white")
         .style("stroke", "#000")
         .style("stroke-width", "1.5px")
-        .attr("d", innerArc);
+        .attr('id', function(d){return id + "label" + d.id;})
+        .attr("d", innerArc)
+        .each(function(d,i) {
+            //A regular expression that captures all in between the start of a string
+            //(denoted by ^) and the first capital letter L
+            var firstArcSection = /(^.+?)L/;
+
+            //The [1] gives back the expression between the () (thus not the L as well)
+            //which is exactly the arc statement
+            var newArc = firstArcSection.exec( d3.select(this).attr("d") )[1];
+            //Replace all the comma's so that IE can handle it -_-
+            //The g after the / is a modifier that "find all matches rather than
+            //stopping after the first match"
+            newArc = newArc.replace(/,/g , " ");
+
+            //Create a new invisible arc that the text can flow along
+            svg.append("path")
+                .attr("id", id + "label" + d.id + "_")
+                .attr("d", newArc)
+                .style("fill", "none");
+        });
+
+    g.selectAll(".label")
+        .data(data.items)
+        .enter()
+        .append("text")
+        .attr("dy", (labelRadius - minRadius) / 2 + 4)
+        .attr("text-anchor", "middle")
+        .append("textPath")
+        .attr("class", "labelpath")
+        .attr("xlink:href", function(d) {
+            return "#" + id + "label" + d.id + "_";
+        })
+        .attr("startOffset", "50%")
+        .text(function(d) {
+            return d.label
+        });
 
 
     const colors = d3.scale.category10();
@@ -57,20 +95,66 @@ function circular(element, data) {
         .style("opacity", 0.8)
         .style("stroke", "#000")
         .style("stroke-width", "1.5px")
+        .attr('id', function(d){return id + "arc" + getItemsetId(d.items);})
         .attr("d", arcs)
         .on("mouseover",function(){
-          console.log("Hover", this);
-          var sel = d3.select(this);
-          sel.style("opacity", 1);
-          sel.style("stroke-width", "2px");
+            console.log("Hover", this);
+            var sel = d3.select(this);
+            sel.style("opacity", 1);
+            sel.style("stroke-width", "2px");
         })
         .on("mouseout",function(){
-          console.log("Hover", this);
-          var sel = d3.select(this);
-          sel.style("opacity", 0.8);
-          sel.style("stroke-width", "1.5px");
+            console.log("Hover", this);
+            var sel = d3.select(this);
+            sel.style("opacity", 0.8);
+            sel.style("stroke-width", "1.5px");
+        })
+        .each(function(d,i) {
+            //A regular expression that captures all in between the start of a string
+            //(denoted by ^) and the first capital letter L
+            var firstArcSection = /(^.+?)L/;
+
+            //The [1] gives back the expression between the () (thus not the L as well)
+            //which is exactly the arc statement
+            var matches = firstArcSection.exec( d3.select(this).attr("d") );
+            if (matches == null){
+                console.log("Nope");
+                return
+            }
+
+            var newArc = matches[1];
+            //Replace all the comma's so that IE can handle it -_-
+            //The g after the / is a modifier that "find all matches rather than
+            //stopping after the first match"
+            newArc = newArc.replace(/,/g , " ");
+
+            //Create a new invisible arc that the text can flow along
+            svg.append("path")
+                .attr("id", id + "arc" + getItemsetId(d.items) + "_")
+                .attr("d", newArc)
+                .style("fill", "none");
         });
 
+    g.selectAll(".label")
+        .data(data.itemsets)
+        .enter()
+        .append("text")
+        .attr("dy", -10)
+        .attr("text-anchor", "middle")
+        .append("textPath")
+        .attr("class", "textpath")
+        .attr("xlink:href", function(d) {
+            return "#" + id + "arc" + getItemsetId(d.items) + "_";
+        })
+        .attr("startOffset", "50%")
+        .text(function(d) {
+            return d.support
+        });
+
+}
+
+function getItemsetId(itemset){
+    return itemset.join("_")
 }
 
 function calculateItemAngles(items) {
