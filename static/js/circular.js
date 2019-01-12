@@ -1,9 +1,12 @@
+let instance = 0;
 
 function circular(element, data) {
-    const width = 800;
-    const height = 800;
+    const size = 800;
 
-    const id = Math.random() % 100000;
+    const width = size;
+    const height = size;
+
+    const scope = instance++;
 
     const svg = element.append("svg")
         .attr("width", width)
@@ -11,80 +14,87 @@ function circular(element, data) {
         .attr("viewBox", [-width / 2, -height / 2, width, height]);
     const g = svg.append("g");
 
-
-    const minRadius = 0;
-    const labelRadius = 100;
-    const maxRadius = 400;
-    const radiusScale = d3.scale.linear()
-        .range([labelRadius, maxRadius]);
-
     calculateItemAngles(data.items);
     calculateItemsetAngles(data.items, data.itemsets);
 
+    const innerRadius = 0;
+    const labelRadius = 0.2 * size / 2;
+    const outerRadius = size / 2 - 30;
 
+    addItems(g, data.items, innerRadius, labelRadius, scope);
+    addItemsets(g, data.itemsets, labelRadius, outerRadius, scope);
+}
+
+
+function addItems(g, items, innerRadius, outerRadius, scope){
     const innerArc = d3.arc()
-        .innerRadius(minRadius)
-        .outerRadius(labelRadius);
+        .innerRadius(innerRadius)
+        .outerRadius(outerRadius);
 
-    let nodes = g.selectAll(".item")
-        .data(data.items)
+    const labelArc = d3.arc()
+        .innerRadius(outerRadius)
+        .outerRadius(outerRadius);
+
+    let itemGroups = g.selectAll(".item")
+        .data(items)
         .enter()
-        .append("path")
+        .append("g")
+        .classed("item", true);
+
+    itemGroups.append("path")
         .style("fill", "white")
         .style("stroke", "#000")
         .style("stroke-width", "1.5px")
-        .attr('id', function(d){return id + "label" + d.id;})
-        .attr("d", innerArc)
-        .each(function(d,i) {
-            //A regular expression that captures all in between the start of a string
-            //(denoted by ^) and the first capital letter L
-            var firstArcSection = /(^.+?)L/;
+        .attr("d", innerArc);
 
-            //The [1] gives back the expression between the () (thus not the L as well)
-            //which is exactly the arc statement
-            var newArc = firstArcSection.exec( d3.select(this).attr("d") )[1];
-            //Replace all the comma's so that IE can handle it -_-
-            //The g after the / is a modifier that "find all matches rather than
-            //stopping after the first match"
-            newArc = newArc.replace(/,/g , " ");
+    itemGroups.append("path")
+        .style("fill", "none")
+        .attr("id", function(d){return scope + "_" + d.id;})
+        .attr("d", labelArc);
 
-            //Create a new invisible arc that the text can flow along
-            svg.append("path")
-                .attr("id", id + "label" + d.id + "_")
-                .attr("d", newArc)
-                .style("fill", "none");
-        });
-
-    g.selectAll(".label")
-        .data(data.items)
-        .enter()
-        .append("text")
-        .attr("dy", (labelRadius - minRadius) / 2 + 4)
+    itemGroups.append("text")
+        .attr("dy", (outerRadius - innerRadius) / 2 + 4)
         .attr("text-anchor", "middle")
         .append("textPath")
-        .attr("class", "labelpath")
-        .attr("xlink:href", function(d) {
-            return "#" + id + "label" + d.id + "_";
+        .attr("class", "textpath")
+        .attr("xlink:href", function (d) {
+            return "#" + scope + "_" + d.id;
         })
-        .attr("startOffset", "50%")
-        .text(function(d) {
+        .attr("startOffset", "25%")
+        .text(function (d) {
             return d.label
         });
 
+}
 
+function addItemsets(g, itemsets, innerRadius, outerRadius, scope){
     const colors = d3.scale.category10();
     // const colors = d3.interpolateBlues;
 
-    const arcs = d3.arc()
-        .innerRadius(labelRadius)
+    const radiusScale = d3.scale.linear()
+        .range([innerRadius, outerRadius]);
+
+    const arcGen = d3.arc()
+        .innerRadius(innerRadius)
         .outerRadius(function (d) {
             return radiusScale(d.support);
         });
 
-    g.selectAll(".itemset")
-        .data(data.itemsets)
+    const labelArc = d3.arc()
+        .innerRadius(function (d) {
+            return radiusScale(d.support);
+        })
+        .outerRadius(function (d) {
+            return radiusScale(d.support);
+        });
+
+    let itemsetGroups = g.selectAll(".itemset")
+        .data(itemsets)
         .enter()
-        .append("path")
+        .append("g")
+        .classed("itemset", true);
+
+    itemsetGroups.append("path")
         .style("fill", function (d, i) {
             if (d.items.length === 1) {
                 return "#fff";
@@ -92,69 +102,30 @@ function circular(element, data) {
                 return colors(i);
             }
         })
-        .style("opacity", 0.8)
-        .style("stroke", "#000")
-        .style("stroke-width", "1.5px")
-        .attr('id', function(d){return id + "arc" + getItemsetId(d.items);})
-        .attr("d", arcs)
-        .on("mouseover",function(){
-            console.log("Hover", this);
-            var sel = d3.select(this);
-            sel.style("opacity", 1);
-            sel.style("stroke-width", "2px");
-        })
-        .on("mouseout",function(){
-            console.log("Hover", this);
-            var sel = d3.select(this);
-            sel.style("opacity", 0.8);
-            sel.style("stroke-width", "1.5px");
-        })
-        .each(function(d,i) {
-            //A regular expression that captures all in between the start of a string
-            //(denoted by ^) and the first capital letter L
-            var firstArcSection = /(^.+?)L/;
+        .classed("arc", true)
+        .attr("d", arcGen);
 
-            //The [1] gives back the expression between the () (thus not the L as well)
-            //which is exactly the arc statement
-            var matches = firstArcSection.exec( d3.select(this).attr("d") );
-            if (matches == null){
-                console.log("Nope");
-                return
-            }
+    itemsetGroups.append("path")
+        .style("fill", "none")
+        .attr("id", function(d){return scope + "_" + getItemsetId(d.items);})
+        .attr("d", labelArc);
 
-            var newArc = matches[1];
-            //Replace all the comma's so that IE can handle it -_-
-            //The g after the / is a modifier that "find all matches rather than
-            //stopping after the first match"
-            newArc = newArc.replace(/,/g , " ");
-
-            //Create a new invisible arc that the text can flow along
-            svg.append("path")
-                .attr("id", id + "arc" + getItemsetId(d.items) + "_")
-                .attr("d", newArc)
-                .style("fill", "none");
-        });
-
-    g.selectAll(".label")
-        .data(data.itemsets)
-        .enter()
-        .append("text")
+    itemsetGroups.append("text")
         .attr("dy", -10)
         .attr("text-anchor", "middle")
         .append("textPath")
-        .attr("class", "textpath")
-        .attr("xlink:href", function(d) {
-            return "#" + id + "arc" + getItemsetId(d.items) + "_";
+        .classed("textpath", true)
+        .attr("xlink:href", function (d) {
+            return "#" + scope + "_" + getItemsetId(d.items)
         })
-        .attr("startOffset", "50%")
-        .text(function(d) {
+        .attr("startOffset", "25%")
+        .text(function (d) {
             return d.support
         });
-
 }
 
-function getItemsetId(itemset){
-    return itemset.join("_")
+function getItemsetId(itemset) {
+    return "itemset_" + itemset.join("_")
 }
 
 function calculateItemAngles(items) {
@@ -195,9 +166,9 @@ function calculateItemsetAngles(items, itemsets) {
             set.endAngle = d3.max(setItems, function (d) {
                 return d.endAngle;
             });
-        }else if(set.items.length === items.length){
-            set.startAngle = 0;
-            set.endAngle = Math.PI * 2;
+        } else if (set.items.length === items.length) {
+            set.startAngle = Math.PI;
+            set.endAngle = 3 * Math.PI;
         } else {
             let startEndItem = findStartEndItems(setItems, items);
             let startItem = startEndItem[0];
@@ -208,7 +179,7 @@ function calculateItemsetAngles(items, itemsets) {
 
         // d3js does not respect start and end angle order. It just arcs from the smallest to the largest.
         // We fix this by forcing the end angle to always be larger than the start angle (adding 2PI).
-        while(set.startAngle > set.endAngle){
+        while (set.startAngle > set.endAngle) {
             set.endAngle += Math.PI * 2;
         }
     });
@@ -225,7 +196,7 @@ function findStartEndItems(items, allItems) {
         itemIds.push(item.id)
     }
 
-    function getEndItem(startItem){
+    function getEndItem(startItem) {
         let startIndex = allItemIds.indexOf(startItem.id);
         for (let offset = 1; offset < items.length; offset++) {
             let nextIndex = (startIndex + offset) % allItemIds.length;
@@ -239,7 +210,7 @@ function findStartEndItems(items, allItems) {
 
     for (let startItem of items) {
         let endItem = getEndItem(startItem);
-        if(endItem != null){
+        if (endItem != null) {
             return [startItem, endItem];
         }
     }
