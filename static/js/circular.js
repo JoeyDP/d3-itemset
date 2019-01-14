@@ -21,17 +21,17 @@ function circular(element, data) {
     const labelRadius = 0.2 * size / 2;
     const outerRadius = size / 2 - 30;
 
-    addItems(g, data.items, innerRadius, labelRadius, scope);
-    addItemsets(g, data.itemsets, labelRadius, outerRadius, scope);
+    let updateFunc = addItems(g, data.items, innerRadius, labelRadius, scope);
+    addItemsets(g, data.items, data.itemsets, labelRadius, outerRadius, scope, updateFunc);
 }
 
 
-function addItems(g, items, innerRadius, outerRadius, scope){
-    const innerArc = d3.arc()
+function addItems(g, items, innerRadius, outerRadius, scope) {
+    const arcGen = d3.arc()
         .innerRadius(innerRadius)
         .outerRadius(outerRadius);
 
-    const labelArc = d3.arc()
+    const labelArcGen = d3.arc()
         .innerRadius(outerRadius)
         .outerRadius(outerRadius);
 
@@ -41,18 +41,26 @@ function addItems(g, items, innerRadius, outerRadius, scope){
         .append("g")
         .classed("item", true);
 
-    itemGroups.append("path")
+    let groupArcs = itemGroups.append("path")
         .style("fill", "white")
         .style("stroke", "#000")
         .style("stroke-width", "1.5px")
-        .attr("d", innerArc);
+        .attr("d", arcGen)
+        .each(function (d) {
+            this._current = JSON.parse(JSON.stringify(d));
+        });
 
-    itemGroups.append("path")
+    let labelArcs = itemGroups.append("path")
         .style("fill", "none")
-        .attr("id", function(d){return scope + "_" + d.id;})
-        .attr("d", labelArc);
+        .attr("id", function (d) {
+            return scope + "_" + d.id;
+        })
+        .attr("d", labelArcGen)
+        .each(function (d) {
+            this._current = JSON.parse(JSON.stringify(d));
+        });
 
-    itemGroups.append("text")
+    let labels = itemGroups.append("text")
         .attr("dy", (outerRadius - innerRadius) / 2 + 4)
         .attr("text-anchor", "middle")
         .append("textPath")
@@ -65,9 +73,36 @@ function addItems(g, items, innerRadius, outerRadius, scope){
             return d.label
         });
 
+    function update(){
+        console.log(items);
+        let duration = 1000;
+
+        groupArcs
+            .style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"})
+            .transition()
+            .duration(duration)
+            .attrTween("d", animate(arcGen))
+            .each("end", function(){
+                d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
+            });
+
+        labelArcs
+            .style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"})
+            .transition()
+            .duration(duration)
+            .attrTween("d", animate(labelArcGen))
+            .each("end", function(){
+                d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
+                labels.style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
+            });
+
+        labels.style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"});
+    }
+
+    return update;
 }
 
-function addItemsets(g, itemsets, innerRadius, outerRadius, scope){
+function addItemsets(g, items, itemsets, innerRadius, outerRadius, scope, updateFunc) {
     const colors = d3.scale.category10();
     // const colors = d3.interpolateBlues;
 
@@ -80,7 +115,7 @@ function addItemsets(g, itemsets, innerRadius, outerRadius, scope){
             return radiusScale(d.support);
         });
 
-    const labelArc = d3.arc()
+    const labelArcGen = d3.arc()
         .innerRadius(function (d) {
             return radiusScale(d.support);
         })
@@ -94,7 +129,7 @@ function addItemsets(g, itemsets, innerRadius, outerRadius, scope){
         .append("g")
         .classed("itemset", true);
 
-    itemsetGroups.append("path")
+    let groupArcs = itemsetGroups.append("path")
         .style("fill", function (d, i) {
             if (d.items.length === 1) {
                 return "#fff";
@@ -102,18 +137,30 @@ function addItemsets(g, itemsets, innerRadius, outerRadius, scope){
                 return colors(i);
             }
         })
+        .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"})
         .classed("arc", true)
-        .attr("d", arcGen);
+        .attr("d", arcGen)
+        .each(function (d) {
+            this._current = JSON.parse(JSON.stringify(d));
+        })
+        .on("click", click);
 
-    itemsetGroups.append("path")
+    let labelArcs = itemsetGroups.append("path")
         .style("fill", "none")
-        .attr("id", function(d){return scope + "_" + getItemsetId(d.items);})
-        .attr("d", labelArc);
+        .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"})
+        .attr("id", function (d) {
+            return scope + "_" + getItemsetId(d.items);
+        })
+        .attr("d", labelArcGen)
+        .each(function (d) {
+            this._current = JSON.parse(JSON.stringify(d));
+        });
 
-    itemsetGroups.append("text")
+    let labels = itemsetGroups.append("text")
         .attr("dy", -10)
         .attr("text-anchor", "middle")
         .append("textPath")
+        .style("display", function(d){return d.startAngle === null ? "none":"inline"})
         .classed("textpath", true)
         .attr("xlink:href", function (d) {
             return "#" + scope + "_" + getItemsetId(d.items)
@@ -122,6 +169,66 @@ function addItemsets(g, itemsets, innerRadius, outerRadius, scope){
         .text(function (d) {
             return d.support
         });
+
+
+    function click(selected) {
+        const duration = 1000;
+
+        let newItems = [];
+
+        const itemMap = {};
+        items.forEach(function (item) {
+            itemMap[item.id] = item;
+        });
+
+        selected.items.forEach(function (itemId) {
+            newItems.push(itemMap[itemId]);
+        });
+
+        items.forEach(function (item) {
+            item.startAngle = 0;
+            item.midAngle = 0;
+            item.endAngle = 0;
+        });
+
+        calculateItemAngles(newItems);
+        calculateItemsetAngles(newItems, itemsets);
+
+        groupArcs
+            .style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"})
+            .transition()
+            .duration(duration)
+            .attrTween("d", animate(arcGen))
+            .each("end", function(){
+                d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
+            });
+
+        labelArcs
+            .style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"})
+            .transition()
+            .duration(duration)
+            .attrTween("d", animate(labelArcGen))
+            .each("end", function(){
+                d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
+                labels.style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
+            });
+
+        labels.style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"});
+
+        updateFunc();
+    }
+}
+
+function animate(gen) {
+    function trans(data){
+        let interpolate = d3.interpolate(this._current, data);
+        let _this = this;
+        return function (t) {
+            _this._current = interpolate(t);
+            return gen(_this._current);
+        };
+    }
+    return trans;
 }
 
 function getItemsetId(itemset) {
@@ -141,18 +248,37 @@ function calculateItemAngles(items) {
 }
 
 function calculateItemsetAngles(items, itemsets) {
-    itemsets.sort(function (x, y) {
-        return d3.descending(x.support, y.support);
-    });
-
     const itemMap = {};
     items.forEach(function (item) {
         itemMap[item.id] = item;
     });
 
+    itemsets.sort(function (x, y) {
+        return d3.descending(x.support, y.support);
+    });
+
+
     itemsets.forEach(function (set) {
         // check length
-        console.assert([items.length, items.length - 1, 1].includes(set.items.length), "Itemsets should only contain k, k-1 and 1 itemsets.");
+        // console.assert([items.length, items.length - 1, 1].includes(set.items.length), "Itemsets should only contain k, k-1 and 1 itemsets.");
+
+        if (![items.length, items.length - 1, 1].includes(set.items.length)) {
+            // set.startAngle = 0;
+            if(set.startAngle == null){
+                set.startAngle = 0;
+            }
+            set.endAngle = set.startAngle;
+            return;
+        }
+        if (set.items.some(function (item) {
+            return !(item in itemMap);
+        })) {
+            if(set.startAngle == null){
+                set.startAngle = 0;
+            }
+            set.endAngle = set.startAngle;
+            return;
+        }
 
         let setItems = [];
         set.items.forEach(function (d) {

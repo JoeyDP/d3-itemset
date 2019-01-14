@@ -50,6 +50,21 @@
             "items": [
                 {"id": 1, "label": "A"},
                 {"id": 2, "label": "B"},
+            ],
+            "itemsets": [
+                {"items": [1], "support": 0.9},
+                {"items": [2], "support": 0.7},
+                {"items": [1, 2], "support": 0.6}
+            ]
+        }
+    );
+
+    circular(
+        body,
+        {
+            "items": [
+                {"id": 1, "label": "A"},
+                {"id": 2, "label": "B"},
                 {"id": 3, "label": "C"},
                 {"id": 4, "label": "D"}
             ],
@@ -58,6 +73,12 @@
                 {"items": [2], "support": 0.7},
                 {"items": [3], "support": 0.65},
                 {"items": [4], "support": 0.7},
+                {"items": [1, 2], "support": 0.61},
+                {"items": [2, 3], "support": 0.65},
+                {"items": [1, 3], "support": 0.65},
+                {"items": [1, 4], "support": 0.61},
+                {"items": [2, 4], "support": 0.65},
+                {"items": [3, 4], "support": 0.65},
                 {"items": [1, 2, 3], "support": 0.6},
                 {"items": [2, 3, 4], "support": 0.2},
                 {"items": [3, 4, 1], "support": 0.5},
