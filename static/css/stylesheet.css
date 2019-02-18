@@ -35,3 +35,34 @@
 }
 
 
+
+.overlay-parent {
+    display: inline-block;
+    position: relative;
+}
+
+
+.overlay-child {
+    position: absolute;
+}
+
+.reset-button {
+    z-index: 5;
+    margin-left: 10px;
+    margin-top: 10px;
+    cursor:pointer;
+    border: none;
+    color: black;
+    border-radius: 12px;
+    padding: 10px 10px;
+    text-align: center;
+    background-color: #c7c7c7; /* Grey */
+
+text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+}
+
+.reset-button:hover {
+    background-color: #828282;
+}
