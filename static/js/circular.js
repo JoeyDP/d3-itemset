@@ -41,6 +41,10 @@ class Circular {
         this.labelRadius = 0.2 * this.size / 2;
         this.outerRadius = this.size / 2 - 30;
 
+        this.animationDuration = 1000;
+
+        this.arcs = [];
+
         this.calculateItemAngles(this.items);
         this.calculateItemsetAngles(this.items, this.itemsets);
 
@@ -77,6 +81,8 @@ class Circular {
             .each(function (d) {
                 this._current = JSON.parse(JSON.stringify(d));
             });
+        this.itemGroupArcs.arcGen = this.itemArcGen;
+        this.arcs.push(this.itemGroupArcs);
 
         this.itemLabelArcs = itemGroups.append("path")
             .style("fill", "none")
@@ -87,6 +93,8 @@ class Circular {
             .each(function (d) {
                 this._current = JSON.parse(JSON.stringify(d));
             });
+        this.itemLabelArcs.arcGen = this.itemLabelArcGen;
+        this.arcs.push(this.itemLabelArcs);
 
         this.itemLabels = itemGroups.append("text")
             .attr("dy", (this.labelRadius - this.innerRadius) / 2 + 4)
@@ -99,7 +107,12 @@ class Circular {
             .attr("startOffset", "25%")
             .text(function (d) {
                 return d.label
+            })
+            .each(function (d) {
+                this._current = JSON.parse(JSON.stringify(d));
             });
+        this.itemLabels.arcGen = this.itemLabelArcGen;
+        this.arcs.push(this.itemLabels);
     }
 
     constructItemsets(){
@@ -144,6 +157,8 @@ class Circular {
                 this._current = JSON.parse(JSON.stringify(d));
             })
             .on("click", this.itemsetClick.bind(this));
+        this.itemsetGroupArcs.arcGen = this.itemsetArcGen;
+        this.arcs.push(this.itemsetGroupArcs);
 
         this.itemsetLabelArcs = itemsetGroups.append("path")
             .style("fill", "none")
@@ -155,6 +170,8 @@ class Circular {
             .each(function (d) {
                 this._current = JSON.parse(JSON.stringify(d));
             });
+        this.itemsetLabelArcs.arcGen = this.itemsetLabelArcGen;
+        this.arcs.push(this.itemsetLabelArcs);
 
         this.itemsetLabels = itemsetGroups.append("text")
             .attr("dy", -10)
@@ -168,7 +185,12 @@ class Circular {
             .attr("startOffset", "25%")
             .text(function (d) {
                 return d.support
+            })
+            .each(function (d) {
+                this._current = JSON.parse(JSON.stringify(d));
             });
+        this.itemsetLabels.arcGen = this.itemsetLabelArcGen;
+        this.arcs.push(this.itemsetLabels);
     }
 
     itemsetClick(selected) {
@@ -196,50 +218,17 @@ class Circular {
     }
 
     transition(){
-        const duration = 1000;
+        this.arcs.forEach(function(arc){
+            arc
+                .style("display", function(d){return this._current.startAngle === this._current.endAngle && d.startAngle === d.endAngle ? "none":"inline";})
+                .transition()
+                .duration(this.animationDuration)
+                .attrTween("d", animate(arc.arcGen))
+                .each("end", function(){
+                    d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
+                });
+        }, this);
 
-        const self = this;
-        this.itemsetGroupArcs
-            .style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"})
-            .transition()
-            .duration(duration)
-            .attrTween("d", animate(this.itemsetArcGen))
-            .each("end", function(){
-                d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
-            });
-
-        this.itemsetLabelArcs
-            .style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"})
-            .transition()
-            .duration(duration)
-            .attrTween("d", animate(this.itemsetLabelArcGen))
-            .each("end", function(){
-                d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
-                self.itemsetLabels.style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
-            });
-
-        this.itemsetLabels.style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"});
-
-        this.itemGroupArcs
-            .style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"})
-            .transition()
-            .duration(duration)
-            .attrTween("d", animate(this.itemArcGen))
-            .each("end", function(){
-                d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
-            });
-
-        this.itemLabelArcs
-            .style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"})
-            .transition()
-            .duration(duration)
-            .attrTween("d", animate(this.itemLabelArcGen))
-            .each("end", function(){
-                d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
-                self.itemLabels.style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
-            });
-
-        this.itemLabels.style("display", function(d){return d.startAngle === d.endAngle ? null:"inline"});
     }
 
     calculateItemAngles(items) {
@@ -322,11 +311,10 @@ class Circular {
 function animate(gen) {
     function trans(data){
         let interpolate = d3.interpolate(this._current, data);
-        let _this = this;
         return function (t) {
-            _this._current = interpolate(t);
-            return gen(_this._current);
-        };
+            this._current = interpolate(t);
+            return gen(this._current);
+        }.bind(this);
     }
     return trans;
 }
