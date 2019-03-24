@@ -36,6 +36,7 @@ class Circular {
 
         this.items = items;
         this.itemsets = itemsets;
+        this.rootItems = [];
         
         this.itemMap = {};
         this.items.forEach(function (item) {
@@ -65,6 +66,7 @@ class Circular {
     }
     
     reset(){
+        this.rootItems = [];
     	this.setFocussedItems(this.items);
     }
 
@@ -138,21 +140,15 @@ class Circular {
     }
 
     constructItemsets(){
-        const radiusScale = d3.scaleLinear()
-            .range([this.labelRadius, this.outerRadius]);
+        // const radiusScale = d3.scaleLinear()
+        //     .range([this.labelRadius, this.outerRadius]);
 
         this.itemsetArcGen = d3.arc()
-            .innerRadius(this.labelRadius)
-            .outerRadius(function (d) {
-                return radiusScale(d.support);
-            });
+            .innerRadius(this.labelRadius);
 
         this.itemsetLabelArcGen = d3.arc()
             .innerRadius(function (d) {
-                return radiusScale(d.support);
-            })
-            .outerRadius(function (d) {
-                return radiusScale(d.support);
+                return d.outerRadius;
             });
 
         let itemsetGroups = this.g.selectAll(".itemset")
@@ -175,7 +171,13 @@ class Circular {
             .each(function (d) {
                 this._current = JSON.parse(JSON.stringify(d));
             })
-            .on("click", this.itemsetClick.bind(this));
+            .on("click", function (selected){
+                if(selected.items.length === 1){
+                    this.itemClick(selected);
+                }else{
+                    this.itemsetClick(selected);
+                }
+            }.bind(this));
         this.itemsetGroupArcs.arcGen = this.itemsetArcGen;
         this.arcs.push(this.itemsetGroupArcs);
 
@@ -199,7 +201,7 @@ class Circular {
 	        });
         
         // Values of all itemsets
-        this.itemsetLabels.append("textPath")
+        this.supportLabels = this.itemsetLabels.append("textPath")
         	.attr("text-anchor", "middle")
             .style("display", function(d){return d.startAngle === null ? "none":"inline"})
             .classed("textpath", true)
@@ -210,8 +212,12 @@ class Circular {
             .append("tspan")
             .attr("dy", "-0.2em")
             .text(function (d) {
-                return d.support.toFixed(2);
-            });
+                if(d.items.length === 1 && this.rootItems.includes(d.items[0])){
+                    return 1;
+                }else{
+                    return d.support.toFixed(2);
+                }
+            }.bind(this));
         
         // Labels at the outer edge for single itemsets
         this.itemsetLabels.filter(function(d){ return d.items.length === 1; })
@@ -243,11 +249,35 @@ class Circular {
 	        .classed("material-icons", true)
 	        .text("settings_backup_restore");
     }
-    
+
+    itemClick(selected) {
+        let newItems = [];
+        let selectedItemId = selected.items[0];
+        this.rootItems.push(selectedItemId);
+
+        this.items.forEach(function (item) {
+            if(item.id === selectedItemId){
+                return;
+            }
+            newItems.push(item);
+        }, this);
+        this.items.forEach(function (item) {
+            item.startAngle = 0;
+            item.midAngle = 0;
+            item.endAngle = 0;
+
+        });
+
+        this.setFocussedItems(newItems);
+    }
+
     itemsetClick(selected) {
         let newItems = [];
 
         selected.items.forEach(function (itemId) {
+            if(this.rootItems.includes(itemId)){
+                return;
+            }
             newItems.push(this.getItem(itemId));
         }, this);
 
@@ -256,7 +286,7 @@ class Circular {
             item.midAngle = 0;
             item.endAngle = 0;
         });
-        
+
         this.setFocussedItems(newItems)
     }
 
@@ -267,13 +297,13 @@ class Circular {
     	}else{
     		this.resetButton.style("display", "block");
     	}
-    	
+
         this.calculateItemAngles(items);
         this.calculateItemsetAngles(items, this.itemsets);
 
         this.transition();
     }
-    
+
     transition(){
         this.arcs.forEach(function(arc){
             arc
@@ -285,7 +315,13 @@ class Circular {
                     d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
                 });
         }, this);
-
+        this.supportLabels.text(function (d) {
+            if(d.items.length === 1 && this.rootItems.includes(d.items[0])){
+                return 1;
+            }else{
+                return d.support.toFixed(2);
+            }
+        }.bind(this));
     }
 
     calculateItemAngles(items) {
@@ -307,8 +343,18 @@ class Circular {
         });
 
         const itemIds = items.map(item => item.id);
-        
+
+        const radiusScale = d3.scaleLinear().range([this.labelRadius, this.outerRadius]);
+
+        function hideSet(set){
+            if(set.startAngle == null){
+                set.startAngle = 0;
+            }
+            set.endAngle = set.startAngle;
+        }
+
         itemsets.forEach(function (set) {
+            // check itemset length. Only display n, n-1 and 1.
             if (![items.length, items.length - 1, 1].includes(set.items.length)) {
                 // set.startAngle = 0;
                 if(set.startAngle == null){
@@ -317,29 +363,42 @@ class Circular {
                 set.endAngle = set.startAngle;
                 return;
             }
+
+            // item not selected => not rendered
             if (set.items.some(function (item) {
-                return !(itemIds.includes(item));
+                return !(itemIds.includes(item) || this.rootItems.includes(item));
+            }.bind(this))){
+                hideSet(set);
+                return;
+            }
+
+            // does not contain all root items => not rendered
+            if(this.rootItems.some(function(item){
+                return !set.items.includes(item);
             })) {
-                if(set.startAngle == null){
-                    set.startAngle = 0;
-                }
-                set.endAngle = set.startAngle;
+                hideSet(set);
                 return;
             }
 
             let setItems = [];
             set.items.forEach(function (d) {
+                if (this.rootItems.includes(d)){
+                    return;
+                }
                 setItems.push(this.getItem(d));
             }, this);
 
-            if (set.items.length === 1) {
+            if(setItems.length === 0){
+                set.startAngle = Math.PI;
+                set.endAngle = 3 * Math.PI;
+            }else if (setItems.length === 1) {
                 set.startAngle = d3.min(setItems, function (d) {
                     return d.startAngle;
                 });
                 set.endAngle = d3.max(setItems, function (d) {
                     return d.endAngle;
                 });
-            } else if (set.items.length === items.length) {
+            } else if (setItems.length === items.length) {
                 set.startAngle = Math.PI;
                 set.endAngle = 3 * Math.PI;
             } else {
@@ -348,6 +407,12 @@ class Circular {
                 let endItem = startEndItem[1];
                 set.startAngle = startItem.midAngle;
                 set.endAngle = endItem.midAngle;
+            }
+
+            if (set.items.length === 1 && this.rootItems.includes(set.items[0])){
+                set.outerRadius = radiusScale(1);
+            }else{
+                set.outerRadius = radiusScale(set.support);
             }
 
             // d3js does not respect start and end angle order. It just arcs
