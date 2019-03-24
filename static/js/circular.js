@@ -1,5 +1,11 @@
 let instance = 0;
 
+const RENDER_WIDTH = 800;
+const RENDER_HEIGHT = 800;
+const DIAMETER = 650
+
+// const colors = d3.scale.category10();
+var colors = d3.scaleOrdinal(d3.schemeCategory10)
 
 function circular(element, data, size=800) {
     const width = size;
@@ -14,32 +20,33 @@ function circular(element, data, size=800) {
         .classed("overlay-child", true)
         .attr("width", width)
         .attr("height", height)
-        .attr("viewBox", [-width / 2, -height / 2, width, height]);
-    const g = svg.append("g");
+        .attr("viewBox", [-RENDER_WIDTH / 2, -RENDER_HEIGHT / 2, RENDER_WIDTH, RENDER_HEIGHT]);
 
-    const visualization = new Circular(g, data.items, data.itemsets, size);
-
-    div.append("button")
-        .classed("overlay-child", true)
-        .classed("reset-button", true)
-        .on("click", visualization.reset.bind(visualization))
-        .append("i")
-        .classed("fas fa-sync-alt", true);
-
+    const overlayDiv = div.append("div")
+        .classed("overlay-child patternOptions showOnAncestorHover", true);
+    
+    const visualization = new Circular(svg, overlayDiv, data.items, data.itemsets);
 }
 
 class Circular {
-    constructor(g, items, itemsets, size) {
-        this.g = g;
+    constructor(svg, overlay, items, itemsets) {
+        this.svg = svg;
+        this.overlay = overlay;
+        this.g = svg.append("g");
+
         this.items = items;
         this.itemsets = itemsets;
+        
+        this.itemMap = {};
+        this.items.forEach(function (item) {
+            this.itemMap[item.id] = item;
+        }, this);
 
-        this.size = size;
         this.scope = instance++;
 
         this.innerRadius = 0;
-        this.labelRadius = 0.2 * this.size / 2;
-        this.outerRadius = this.size / 2 - 30;
+        this.labelRadius = 0.2 * DIAMETER / 2;
+        this.outerRadius = DIAMETER / 2 - 30;
 
         this.animationDuration = 1000;
 
@@ -50,12 +57,15 @@ class Circular {
 
         this.constructItems();
         this.constructItemsets();
+        this.constructControls();
     }
 
+    getItem(id){
+    	return this.itemMap[id];
+    }
+    
     reset(){
-        this.calculateItemAngles(this.items);
-        this.calculateItemsetAngles(this.items, this.itemsets);
-        this.transition();
+    	this.setFocussedItems(this.items);
     }
 
     constructItems(){
@@ -105,21 +115,30 @@ class Circular {
                 return "#" + this.scope + "_" + d.id;
             }.bind(this))
             .attr("startOffset", "25%")
-            .text(function (d) {
-                return d.label
-            })
-            .each(function (d) {
+            .append("tspan")
+                        .each(function (d) {
                 this._current = JSON.parse(JSON.stringify(d));
             });
         this.itemLabels.arcGen = this.itemLabelArcGen;
         this.arcs.push(this.itemLabels);
+        
+        // render icon or full label
+        function hasIcon(d){return 'icon' in d && d.icon != "empty";}
+        
+        this.itemLabels.filter(hasIcon)
+        	.attr('dominant-baseline', 'central')
+            .classed("fa", true)
+		    .text(function(d) {
+		    	return faUnicode(d.icon);
+		    });
+	    this.itemLabels.filter(function (d){return !hasIcon(d);})
+		    .text(function(d) {
+		    	return d.label;
+		    });
     }
 
     constructItemsets(){
-        const colors = d3.scale.category10();
-        // const colors = d3.interpolateBlues;
-
-        const radiusScale = d3.scale.linear()
+        const radiusScale = d3.scaleLinear()
             .range([this.labelRadius, this.outerRadius]);
 
         this.itemsetArcGen = d3.arc()
@@ -147,7 +166,7 @@ class Circular {
                 if (d.items.length === 1) {
                     return "#fff";
                 } else {
-                    return colors(i);
+                    return colors(getItemsetId(d.items));
                 }
             })
             .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"})
@@ -173,50 +192,88 @@ class Circular {
         this.itemsetLabelArcs.arcGen = this.itemsetLabelArcGen;
         this.arcs.push(this.itemsetLabelArcs);
 
+        
         this.itemsetLabels = itemsetGroups.append("text")
-            .attr("dy", -10)
-            .attr("text-anchor", "middle")
-            .append("textPath")
+	        .each(function (d) {
+	            this._current = JSON.parse(JSON.stringify(d));
+	        });
+        
+        // Values of all itemsets
+        this.itemsetLabels.append("textPath")
+        	.attr("text-anchor", "middle")
             .style("display", function(d){return d.startAngle === null ? "none":"inline"})
             .classed("textpath", true)
             .attr("xlink:href", function (d) {
                 return "#" + this.scope + "_" + getItemsetId(d.items)
             }.bind(this))
             .attr("startOffset", "25%")
+            .append("tspan")
+            .attr("dy", "-0.2em")
             .text(function (d) {
-                return d.support
-            })
-            .each(function (d) {
-                this._current = JSON.parse(JSON.stringify(d));
+                return d.support.toFixed(2);
             });
+        
+        // Labels at the outer edge for single itemsets
+        this.itemsetLabels.filter(function(d){ return d.items.length === 1; })
+	        .append("textPath")
+	    	.attr("text-anchor", "middle")
+	        .style("display", function(d){return d.startAngle === null ? "none":"inline"})
+	        .classed("textpath", true)
+	        .attr("xlink:href", function (d) {
+	            return "#" + this.scope + "_" + getItemsetId(d.items)
+	        }.bind(this))
+	        .attr("startOffset", "25%")
+	        .append("tspan")
+        	.attr("dy", "-1.2em")
+	        .text(function (d) {
+	            return this.getItem(d.items[0]).label;
+	        }.bind(this));
+        
         this.itemsetLabels.arcGen = this.itemsetLabelArcGen;
         this.arcs.push(this.itemsetLabels);
     }
 
+    constructControls(){
+        this.resetButton = this.overlay.append("button")
+	        .classed("btn btn-fab btn-fab-mini btnInfo reset-button", true)
+	        .style("display", "none")
+	        .on("click", this.reset.bind(this));
+        
+        this.resetButton.append("i")
+	        .classed("material-icons", true)
+	        .text("settings_backup_restore");
+    }
+    
     itemsetClick(selected) {
         let newItems = [];
 
-        const itemMap = {};
-        this.items.forEach(function (item) {
-            itemMap[item.id] = item;
-        });
-
         selected.items.forEach(function (itemId) {
-            newItems.push(itemMap[itemId]);
-        });
+            newItems.push(this.getItem(itemId));
+        }, this);
 
         this.items.forEach(function (item) {
             item.startAngle = 0;
             item.midAngle = 0;
             item.endAngle = 0;
         });
+        
+        this.setFocussedItems(newItems)
+    }
 
-        this.calculateItemAngles(newItems);
-        this.calculateItemsetAngles(newItems, this.itemsets);
+    setFocussedItems(items){
+    	// If all items are rendered, hide reset button
+    	if(items.length === this.items.length){
+    		this.resetButton.style("display", "none");
+    	}else{
+    		this.resetButton.style("display", "block");
+    	}
+    	
+        this.calculateItemAngles(items);
+        this.calculateItemsetAngles(items, this.itemsets);
 
         this.transition();
     }
-
+    
     transition(){
         this.arcs.forEach(function(arc){
             arc
@@ -224,7 +281,7 @@ class Circular {
                 .transition()
                 .duration(this.animationDuration)
                 .attrTween("d", animate(arc.arcGen))
-                .each("end", function(){
+                .on("end", function(){
                     d3.select(this).style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline"});
                 });
         }, this);
@@ -244,19 +301,14 @@ class Circular {
     }
 
     calculateItemsetAngles(items, itemsets) {
-        const itemMap = {};
-        items.forEach(function (item) {
-            itemMap[item.id] = item;
-        });
-
         itemsets.sort(function (x, y) {
-            return d3.descending(x.support, y.support);
+        	let order = d3.descending(x.support, y.support);
+            return order !== 0 ? order: d3.ascending(x.items.length, y.items.length);
         });
 
+        const itemIds = items.map(item => item.id);
+        
         itemsets.forEach(function (set) {
-            // check length
-            // console.assert([items.length, items.length - 1, 1].includes(set.items.length), "Itemsets should only contain k, k-1 and 1 itemsets.");
-
             if (![items.length, items.length - 1, 1].includes(set.items.length)) {
                 // set.startAngle = 0;
                 if(set.startAngle == null){
@@ -266,7 +318,7 @@ class Circular {
                 return;
             }
             if (set.items.some(function (item) {
-                return !(item in itemMap);
+                return !(itemIds.includes(item));
             })) {
                 if(set.startAngle == null){
                     set.startAngle = 0;
@@ -277,7 +329,7 @@ class Circular {
 
             let setItems = [];
             set.items.forEach(function (d) {
-                setItems.push(itemMap[d]);
+                setItems.push(this.getItem(d));
             }, this);
 
             if (set.items.length === 1) {
@@ -298,8 +350,10 @@ class Circular {
                 set.endAngle = endItem.midAngle;
             }
 
-            // d3js does not respect start and end angle order. It just arcs from the smallest to the largest.
-            // We fix this by forcing the end angle to always be larger than the start angle (adding 2PI).
+            // d3js does not respect start and end angle order. It just arcs
+			// from the smallest to the largest.
+            // We fix this by forcing the end angle to always be larger than the
+			// start angle (adding 2PI).
             while (set.startAngle > set.endAngle) {
                 set.endAngle += Math.PI * 2;
             }
@@ -356,4 +410,18 @@ function findStartEndItems(items, allItems) {
     return null;
 }
 
+// source: https://stackoverflow.com/a/35007151
+function faUnicode(name) {
+	var testI = document.createElement('i');
+	var char;
+	
+	testI.className = 'fa fa-' + name;
+	document.body.appendChild(testI);
+	
+	char = window.getComputedStyle( testI, ':before' )
+	       .content.replace(/'|"/g, '');
+	testI.remove();
+	console.log(char);
+	return char;// .charCodeAt(0);
+}
 

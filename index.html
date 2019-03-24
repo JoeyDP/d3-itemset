@@ -7,22 +7,27 @@
     <title>Example1</title>
     <meta name="description" content="Example 1">
     <meta name="author" content="Joey De Pauw">
-    <link rel="stylesheet" type="text/css" href="static/css/stylesheet.css">
+    <link rel="stylesheet" type="text/css" href="static/css/circular.css">
+
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Material+Icons">
+    <link rel="stylesheet" href="https://unpkg.com/bootstrap-material-design@4.1.1/dist/css/bootstrap-material-design.min.css" integrity="sha384-wXznGJNEXNG1NFsbm0ugrLFMQPWswR3lds2VeinahP8N0zJw9VWSopbjv2x7WCvX" crossorigin="anonymous">
 
     <!--Font Awesome-->
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+
 </head>
 
 <body>
 
-<script src="https://d3js.org/d3.v3.min.js"></script>
+<script src="https://d3js.org/d3.v4.min.js"></script>
 <script src="https://d3js.org/d3-path.v1.min.js"></script>
 <script src="https://d3js.org/d3-shape.v1.min.js"></script>
 <script src="https://d3js.org/d3-color.v1.min.js"></script>
 <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
-<script src="https://d3js.org/d3-scale-chromatic.v1.min.js">
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
 
-</script><script src="static/js/circular.js"></script>
+<script src="static/js/circular.js"></script>
 
 <script type="text/javascript">
 
@@ -31,9 +36,9 @@
         body,
         {
             "items": [
-                {"id": 1, "label": "AAAAA"},
-                {"id": 2, "label": "B"},
-                {"id": 3, "label": "C"}
+                {"id": 1, "label": "AAAAA", "icon": "fa fa-tractor"},
+                {"id": 2, "label": "B", "icon": "fa fa-users"},
+                {"id": 3, "label": "C", "icon": "fa fa-briefcase"}
             ],
             "itemsets": [
                 {"items": [1], "support": 0.9},
