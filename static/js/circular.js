@@ -421,7 +421,6 @@ function faUnicode(name) {
 	char = window.getComputedStyle( testI, ':before' )
 	       .content.replace(/'|"/g, '');
 	testI.remove();
-	console.log(char);
 	return char;// .charCodeAt(0);
 }
 
