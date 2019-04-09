@@ -60,7 +60,45 @@ class Visualization {
     init(){
         this.mainCircle.init();
         this.contextCircle.init();
+        this.constructLines();
         this.constructControls();
+    }
+
+    calculateLines(){
+        let y1 = this.contextCircle.getTopConnection();
+        let y2 = this.mainCircle.getTopConnection();
+
+        this.data = [
+            [
+                {'y': y1, 'x':CONTEXT_POSITION_X},
+                {'y': y2, 'x':1/3 * CONTEXT_POSITION_X},
+                {'y': y2, 'x':0}
+            ],
+            [
+                {'y': -y1, 'x':CONTEXT_POSITION_X},
+                {'y': -y2, 'x':1/3 * CONTEXT_POSITION_X},
+                {'y': -y2, 'x':0}
+            ],
+        ];
+    }
+
+    constructLines(){
+        this.calculateLines();
+        let lineGen = d3.line().x(e => e.x).y(e => e.y).curve(d3.curveBasis);
+
+        this.lines = this.g.selectAll(".scopeLine")
+            .data(this.data)
+            .enter()
+            .append("path")
+            .classed("scopeLine", true)
+            .attr("d", lineGen)
+            .attr("stroke-width", 2)
+            .attr("fill", "none")
+            .attr("stroke", "#828282")
+            .each(function (d){
+                this._current = copy(d);
+            });
+        this.lines.gen = lineGen;
     }
 
     constructControls(){
@@ -75,6 +113,19 @@ class Visualization {
         this.resetButton.append("i")
             .classed("material-icons", true)
             .text("settings_backup_restore");
+    }
+
+    transition(){
+        this.calculateLines();
+
+        this.lines
+            .data(this.data)
+            .transition()
+            .duration(ANIMATION_DURATION)
+            .attrTween("d", animate(this.lines.gen))
+            // .on('end', function(d){
+            //     this._current = copy(d);
+            // })
     }
 
     reset(){
@@ -97,6 +148,7 @@ class Visualization {
         }else{
             this.resetButton.style("display", "block");
         }
+        this.transition();
     }
 
 }
@@ -123,6 +175,8 @@ class Circular {
         this.innerRadius = 0;
         this.labelRadius = 0.2 * diameter / 2;
         this.outerRadius = diameter / 2;
+        this.radiusScale = d3.scaleLinear().range([this.labelRadius, this.outerRadius]);
+
 
         this.arcs = [];
     }
@@ -161,6 +215,14 @@ class Circular {
     }
 
     reset(){
+        throw new Error('Method should be implemented in subclass.');
+    }
+
+    getTopConnection(){
+        throw new Error('Method should be implemented in subclass.');
+    }
+
+    getBottomConnection(){
         throw new Error('Method should be implemented in subclass.');
     }
 
@@ -280,7 +342,7 @@ class Circular {
 
         this.itemsetGroupArcs = itemsetGroups.append("path")
             .style("fill", function (d, i) {
-                if (d.items.length - this.rootItemset.items.length === 1) {
+                if (d.items.length - this.rootItemset.items.length <= 1) {
                     return "#fff";
                 } else {
                     return colors(getItemsetId(d.items));
@@ -492,8 +554,6 @@ class Circular {
             return order !== 0 ? order: d3.ascending(x.items.length, y.items.length);
         });
 
-        const radiusScale = d3.scaleLinear().range([this.labelRadius, this.outerRadius]);
-
         function hideSet(set){
             if(set.startAngle == null){
                 set.startAngle = - Math.PI;
@@ -556,7 +616,7 @@ class Circular {
                 set.endAngle = endItem.midAngle;
             }
 
-            set.outerRadius = radiusScale(set.support / this.rootItemset.support);
+            set.outerRadius = this.radiusScale(set.support / this.rootItemset.support);
 
             // d3js does not respect start and end angle order. It just arcs
 			// from the smallest to the largest.
@@ -596,6 +656,10 @@ class MainCircular extends Circular{
         this.selectedItemIds = selected.items;
         this.updateAll()
     }
+
+    getTopConnection() {
+        return this.outerRadius;
+    }
 }
 
 class ContextCircular extends Circular{
@@ -606,7 +670,6 @@ class ContextCircular extends Circular{
 
     setMainCircle(mainCircle){
         this.mainCircle = mainCircle;
-        // this.selectedItemIds = this.mainCircle.rootItemset.items.map(x=>x.id);
     }
 
     reset(){
@@ -621,6 +684,11 @@ class ContextCircular extends Circular{
         this.selectedItemIds = selected.items;
         this.mainCircle.rootItemset = selected;
         this.updateAll()
+    }
+
+    getTopConnection() {
+        console.log(this.mainCircle.rootItemset);
+        return this.radiusScale(this.mainCircle.rootItemset.support);
     }
 
 }
