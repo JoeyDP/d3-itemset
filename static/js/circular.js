@@ -29,7 +29,7 @@ function circular(element, data, size=800) {
         .attr("viewBox", [(DIAMETER/2 + MARGIN) - RENDER_WIDTH, -RENDER_HEIGHT / 2, RENDER_WIDTH, RENDER_HEIGHT]);
 
     const overlayDiv = div.append("div")
-        .classed("overlay-child patternOptions showOnAncestorHover", true);
+        .classed("overlay-child showOnAncestorHover", true);
 
     const visualization = new Visualization(svg, overlayDiv, data.items, data.itemsets);
 }
@@ -104,7 +104,9 @@ class Visualization {
     constructControls(){
         this.resetButton = this.overlay.append("div")
             .style("float", "right")
-            .style("padding", "10px")
+            .style("margin-left", "auto")
+            .style("padding", "5px")
+            .classed("patternOptions", true)
             .append("button")
             .classed("btn btn-fab btn-fab-mini btnInfo reset-button", true)
             .style("display", "none")
@@ -302,10 +304,10 @@ class Circular {
             }.bind(this));
         this.itemLabels.arcGen = this.itemLabelArcGen;
         this.arcs.push(this.itemLabels);
-        
+
         // render icon or full label
         function hasIcon(d){return 'icon' in d && d.icon != "empty";}
-        
+
         this.itemLabels.filter(hasIcon)
         	.attr('dominant-baseline', 'central')
             .classed("fa", true)
@@ -375,7 +377,7 @@ class Circular {
             .each(function (d) {
 	            this._current = copy(d);
 	        });
-        
+
         // Values of all itemsets
         this.supportLabels = this.itemsetLabels.append("textPath")
         	.attr("text-anchor", "middle")
@@ -402,7 +404,7 @@ class Circular {
                     this.itemsetClick(selected);
                 }
             }.bind(this));
-        
+
         // Labels at the outer edge for single itemsets
         this.singleItemLabels = this.itemsetLabels
 	        .append("textPath")
@@ -425,7 +427,7 @@ class Circular {
             .on("click", function (selected){
                 this.itemClick(selected);
             }.bind(this));
-        
+
         this.itemsetLabels.arcGen = this.itemsetLabelArcGen;
         this.arcs.push(this.itemsetLabels);
     }
@@ -743,10 +745,10 @@ function findStartEndItems(items, allItems) {
 function faUnicode(name) {
 	var testI = document.createElement('i');
 	var char;
-	
+
 	testI.className = 'fa fa-' + name;
 	document.body.appendChild(testI);
-	
+
 	char = window.getComputedStyle( testI, ':before' )
 	       .content.replace(/'|"/g, '');
 	testI.remove();
