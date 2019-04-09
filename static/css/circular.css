@@ -49,13 +49,12 @@ body {
 
 .overlay-child {
     position: absolute;
+    width: 100%;
 }
 
 .reset-button {
     z-index: 5;
     width: auto !important;
-    margin-left: 5px !important;
-    margin-top: 5px !important;
 }
 
 .reset-button:hover {

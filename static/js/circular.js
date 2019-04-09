@@ -1,14 +1,20 @@
 let instance = 0;
 
-const RENDER_WIDTH = 800;
-const RENDER_HEIGHT = 800;
-const DIAMETER = 650
+const MARGIN = 80;
+const DIAMETER = 700;
+const CONTEXT_DIAMETER = 2/3 * DIAMETER;
+const CONTEXT_POSITION_X = -(DIAMETER + CONTEXT_DIAMETER) / 2 - 2 * MARGIN;
 
-// const colors = d3.scale.category10();
-var colors = d3.scaleOrdinal(d3.schemeCategory10)
+const RENDER_WIDTH = DIAMETER + CONTEXT_DIAMETER + 4 * MARGIN;
+const RENDER_HEIGHT = DIAMETER + 2 * MARGIN;
+
+const ANIMATION_DURATION = 1000;
+
+var colors = d3.scaleOrdinal(d3.schemeCategory10);
+
 
 function circular(element, data, size=800) {
-    const width = size;
+    const width = size * 2;
     const height = size;
 
     const div = element.append("div")
@@ -20,24 +26,90 @@ function circular(element, data, size=800) {
         .classed("overlay-child", true)
         .attr("width", width)
         .attr("height", height)
-        .attr("viewBox", [-RENDER_WIDTH / 2, -RENDER_HEIGHT / 2, RENDER_WIDTH, RENDER_HEIGHT]);
+        .attr("viewBox", [(DIAMETER/2 + MARGIN) - RENDER_WIDTH, -RENDER_HEIGHT / 2, RENDER_WIDTH, RENDER_HEIGHT]);
 
     const overlayDiv = div.append("div")
         .classed("overlay-child patternOptions showOnAncestorHover", true);
-    
-    const visualization = new Circular(svg, overlayDiv, data.items, data.itemsets);
+
+    const visualization = new Visualization(svg, overlayDiv, data.items, data.itemsets);
 }
 
-class Circular {
+
+class Visualization {
     constructor(svg, overlay, items, itemsets) {
         this.svg = svg;
         this.overlay = overlay;
-        this.g = svg.append("g");
-
         this.items = items;
         this.itemsets = itemsets;
 
-        this._selectedItemIds = this.items.map(x => x.id);
+
+        this.g = svg.append("g");
+        this.mainGroup = this.g.append("g");
+        this.contextGroup = this.g.append("g");
+        this.contextGroup.attr("transform", "translate(" + CONTEXT_POSITION_X + ",0)");
+
+        this.contextCircle = new ContextCircular(this.contextGroup, copy(this.items), copy(this.itemsets), CONTEXT_DIAMETER, this);
+        this.mainCircle = new MainCircular(this.mainGroup, copy(this.items), copy(this.itemsets), DIAMETER, this);
+
+        this.mainCircle.setContextCircle(this.contextCircle);
+        this.contextCircle.setMainCircle(this.mainCircle);
+
+        this.init();
+    }
+
+    init(){
+        this.mainCircle.init();
+        this.contextCircle.init();
+        this.constructControls();
+    }
+
+    constructControls(){
+        this.resetButton = this.overlay.append("div")
+            .style("float", "right")
+            .style("padding", "10px")
+            .append("button")
+            .classed("btn btn-fab btn-fab-mini btnInfo reset-button", true)
+            .style("display", "none")
+            .on("click", this.reset.bind(this));
+
+        this.resetButton.append("i")
+            .classed("material-icons", true)
+            .text("settings_backup_restore");
+    }
+
+    reset(){
+        this.mainCircle.reset();
+        this.contextCircle.reset();
+
+        this.updateAll();
+    }
+
+    updateAll(){
+        this.mainCircle.update(false);
+        this.contextCircle.update(false);
+        this.update();
+    }
+
+    update(){
+        // If all items are rendered, hide reset button
+        if(this.mainCircle.selectedItemIds.length === this.items.length && this.mainCircle.rootItemIds.length === 0){
+            this.resetButton.style("display", "none");
+        }else{
+            this.resetButton.style("display", "block");
+        }
+    }
+
+}
+
+class Circular {
+    constructor(group, items, itemsets, diameter, parent) {
+        this.g = group;
+
+        this.items = items;
+        this.itemsets = itemsets;
+        this.parent = parent;
+
+        // this._selectedItemIds = this.items.map(x => x.id);
         // this.rootItemIds = [];
         this.rootItemset = {"items": [], "support": 1};
 
@@ -49,19 +121,18 @@ class Circular {
         this.scope = instance++;
 
         this.innerRadius = 0;
-        this.labelRadius = 0.2 * DIAMETER / 2;
-        this.outerRadius = DIAMETER / 2 - 30;
-
-        this.animationDuration = 1000;
+        this.labelRadius = 0.2 * diameter / 2;
+        this.outerRadius = diameter / 2;
 
         this.arcs = [];
+    }
 
+    init(){
         this.calculateItemAngles();
         this.calculateItemsetAngles();
 
         this.constructItems();
         this.constructItemsets();
-        this.constructControls();
     }
 
     getItem(id){
@@ -89,18 +160,16 @@ class Circular {
         return null;
     }
 
+    reset(){
+        // TODO: Make pure
+    }
+
     resolveItemIds(ids){
         let items = [];
         for (let id of ids) {
             items.push(this.getItem(id))
         }
         return items;
-    }
-
-    reset(){
-        this.rootItemset = {"items": [], "support": 1};
-        this.selectedItemIds = this.items.map(x => x.id);
-    	this.update();
     }
 
     constructItems(){
@@ -128,9 +197,10 @@ class Circular {
             .style("fill", "white")
             .style("stroke", "#000")
             .style("stroke-width", "1.5px")
+            .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline";})
             .attr("d", this.itemArcGen)
             .each(function (d) {
-                this._current = JSON.parse(JSON.stringify(d));
+                this._current = copy(d);
             })
             .on("click", function (selected){
                 let items = [...this.rootItemIds, selected.id];
@@ -149,7 +219,7 @@ class Circular {
             }.bind(this))
             .attr("d", this.itemLabelArcGen)
             .each(function (d) {
-                this._current = JSON.parse(JSON.stringify(d));
+                this._current = copy(d);
             });
         this.itemLabelArcs.arcGen = this.itemLabelArcGen;
         this.arcs.push(this.itemLabelArcs);
@@ -158,6 +228,7 @@ class Circular {
             .attr("dy", (this.labelRadius - this.innerRadius) / 2 + 4)
             .attr("text-anchor", "middle")
             .append("textPath")
+            .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline";})
             .attr("class", "textpath")
             .attr("xlink:href", function (d) {
                 return "#" + this.scope + "_" + d.id;
@@ -165,7 +236,7 @@ class Circular {
             .attr("startOffset", "25%")
             .append("tspan")
                         .each(function (d) {
-                this._current = JSON.parse(JSON.stringify(d));
+                this._current = copy(d);
             })
             .on("click", function (selected){
                 let items = [...this.rootItemIds, selected.id];
@@ -222,7 +293,7 @@ class Circular {
             .classed("arc", true)
             .attr("d", this.itemsetArcGen)
             .each(function (d) {
-                this._current = JSON.parse(JSON.stringify(d));
+                this._current = copy(d);
             })
             .on("click", function (selected){
                 if(selected.items.length - this.rootItemset.items.length === 1){
@@ -242,15 +313,15 @@ class Circular {
             }.bind(this))
             .attr("d", this.itemsetLabelArcGen)
             .each(function (d) {
-                this._current = JSON.parse(JSON.stringify(d));
+                this._current = copy(d);
             });
         this.itemsetLabelArcs.arcGen = this.itemsetLabelArcGen;
         this.arcs.push(this.itemsetLabelArcs);
 
-        
         this.itemsetLabels = itemsetGroups.append("text")
-	        .each(function (d) {
-	            this._current = JSON.parse(JSON.stringify(d));
+            .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline";})
+            .each(function (d) {
+	            this._current = copy(d);
 	        });
         
         // Values of all itemsets
@@ -307,17 +378,6 @@ class Circular {
         this.arcs.push(this.itemsetLabels);
     }
 
-    constructControls(){
-        this.resetButton = this.overlay.append("button")
-	        .classed("btn btn-fab btn-fab-mini btnInfo reset-button", true)
-	        .style("display", "none")
-	        .on("click", this.reset.bind(this));
-        
-        this.resetButton.append("i")
-	        .classed("material-icons", true)
-	        .text("settings_backup_restore");
-    }
-
     itemClick(selected) {
         this.rootItemset = selected;
         this.update();
@@ -328,18 +388,15 @@ class Circular {
         this.update()
     }
 
-    update(){
-    	// If all items are rendered, hide reset button
-    	if(this.selectedItemIds.length === this.items.length && this.rootItemIds.length === 0){
-    		this.resetButton.style("display", "none");
-    	}else{
-    		this.resetButton.style("display", "block");
-    	}
-
+    update(propagateUp=true){
         this.calculateItemAngles();
         this.calculateItemsetAngles();
 
         this.transition();
+
+        if (propagateUp){
+            this.parent.update();
+        }
     }
 
     transition(){
@@ -349,7 +406,7 @@ class Circular {
             let transition = arc
                 .style("display", function(d){return this._current.startAngle === this._current.endAngle && d.startAngle === d.endAngle ? "none":"inline";})
                 .transition()
-                .duration(this.animationDuration);
+                .duration(ANIMATION_DURATION);
 
             transition.attrTween("d", animate(arc.arcGen))
                 .on("end", function(){
@@ -359,7 +416,7 @@ class Circular {
                 transition
                     .styleTween("fill", function(d){
                         let fromColor = this._color;
-                        let toColor = colors(getItemsetId(d.items));;
+                        let toColor = colors(getItemsetId(d.items));
                         if (d.items.length - _this.rootItemset.items.length <= 1) {
                             toColor = "#fff";
                         }
@@ -374,7 +431,7 @@ class Circular {
         }, this);
         this.supportLabels
             .transition()
-            .duration(this.animationDuration)
+            .duration(ANIMATION_DURATION)
             .attrTween("text", function (d) {
                 let support = d.support / _this.rootItemset.support;
                 let i = d3.interpolate(d._support || d.support, support);
@@ -495,6 +552,44 @@ class Circular {
     }
 }
 
+
+class MainCircular extends Circular{
+
+    constructor(group, items, itemsets, diameter, parent) {
+        super(group, items, itemsets, diameter, parent);
+        this.selectedItemIds = this.items.map(x => x.id);
+    }
+
+    setContextCircle(contextCircle){
+        this.contextCircle = contextCircle;
+    }
+
+    reset(){
+        this.rootItemset = {"items": [], "support": 1};
+        this.selectedItemIds = this.items.map(x => x.id);
+    }
+}
+
+class ContextCircular extends Circular{
+    constructor(group, items, itemsets, diameter, parent) {
+        super(group, items, itemsets, diameter, parent);
+        this.selectedItemIds = [];
+    }
+
+    setMainCircle(mainCircle){
+        this.mainCircle = mainCircle;
+        // this.selectedItemIds = this.mainCircle.rootItemset.items.map(x=>x.id);
+    }
+
+    reset(){
+        this.selectedItemIds = [];
+    }
+}
+
+
+function copy(obj){
+    return JSON.parse(JSON.stringify(obj));
+}
 
 function animate(gen) {
     function trans(data){
