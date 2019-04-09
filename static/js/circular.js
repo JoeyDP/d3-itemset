@@ -123,9 +123,6 @@ class Visualization {
             .transition()
             .duration(ANIMATION_DURATION)
             .attrTween("d", animate(this.lines.gen))
-            // .on('end', function(d){
-            //     this._current = copy(d);
-            // })
     }
 
     reset(){
@@ -219,10 +216,6 @@ class Circular {
     }
 
     getTopConnection(){
-        throw new Error('Method should be implemented in subclass.');
-    }
-
-    getBottomConnection(){
         throw new Error('Method should be implemented in subclass.');
     }
 
@@ -647,6 +640,9 @@ class MainCircular extends Circular{
     }
 
     itemClick(selected) {
+        if(selected.items.length === this._selectedItemIds.length ){
+            return;
+        }
         this.rootItemset = selected;
         this.contextCircle.selectedItemIds = selected.items;
         this.updateAll();
