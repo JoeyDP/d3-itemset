@@ -161,7 +161,7 @@ class Circular {
     }
 
     reset(){
-        // TODO: Make pure
+        throw new Error('Method should be implemented in subclass.');
     }
 
     resolveItemIds(ids){
@@ -228,14 +228,14 @@ class Circular {
             .attr("dy", (this.labelRadius - this.innerRadius) / 2 + 4)
             .attr("text-anchor", "middle")
             .append("textPath")
-            .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline";})
             .attr("class", "textpath")
             .attr("xlink:href", function (d) {
                 return "#" + this.scope + "_" + d.id;
             }.bind(this))
             .attr("startOffset", "25%")
             .append("tspan")
-                        .each(function (d) {
+            .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline";})
+            .each(function (d) {
                 this._current = copy(d);
             })
             .on("click", function (selected){
@@ -264,9 +264,6 @@ class Circular {
     }
 
     constructItemsets(){
-        // const radiusScale = d3.scaleLinear()
-        //     .range([this.labelRadius, this.outerRadius]);
-
         this.itemsetArcGen = d3.arc()
             .innerRadius(this.labelRadius);
 
@@ -296,7 +293,7 @@ class Circular {
                 this._current = copy(d);
             })
             .on("click", function (selected){
-                if(selected.items.length - this.rootItemset.items.length === 1){
+                if(selected.items.length - this.rootItemset.items.length <= 1){
                     this.itemClick(selected);
                 }else{
                     this.itemsetClick(selected);
@@ -344,7 +341,7 @@ class Circular {
                 }
             }.bind(this))
             .on("click", function (selected){
-                if(selected.items.length - this.rootItemset.items.length === 1){
+                if(selected.items.length - this.rootItemset.items.length <= 1){
                     this.itemClick(selected);
                 }else{
                     this.itemsetClick(selected);
@@ -352,7 +349,7 @@ class Circular {
             }.bind(this));
         
         // Labels at the outer edge for single itemsets
-        this.itemsetLabels.filter(function(d){ return d.items.length === 1; })
+        this.singleItemLabels = this.itemsetLabels
 	        .append("textPath")
 	    	.attr("text-anchor", "middle")
 	        .style("display", function(d){return d.startAngle === null ? "none":"inline"})
@@ -364,28 +361,30 @@ class Circular {
 	        .append("tspan")
         	.attr("dy", "-1.2em")
 	        .text(function (d) {
-	            return this.getItem(d.items[0]).label;
+                let itemIds = d.items.filter(x => !this.rootItemset.items.includes(x));
+                if (itemIds.length === 1){
+                    /// Single item
+                    return this.getItem(itemIds[0]).label;
+                }
 	        }.bind(this))
             .on("click", function (selected){
-            if(selected.items.length - this.rootItemset.items.length === 1){
                 this.itemClick(selected);
-            }else{
-                this.itemsetClick(selected);
-            }
-        }.bind(this));
+            }.bind(this));
         
         this.itemsetLabels.arcGen = this.itemsetLabelArcGen;
         this.arcs.push(this.itemsetLabels);
     }
 
     itemClick(selected) {
-        this.rootItemset = selected;
-        this.update();
+        throw new Error('Method should be implemented in subclass.');
     }
 
     itemsetClick(selected) {
-        this.selectedItemIds = selected.items;
-        this.update()
+        throw new Error('Method should be implemented in subclass.');
+    }
+
+    updateAll(){
+        this.parent.updateAll();
     }
 
     update(propagateUp=true){
@@ -441,6 +440,19 @@ class Circular {
                     d._support = i(t);
                 }.bind(this);
             });
+        this.singleItemLabels
+            .text(function (d) {
+                let itemIds = d.items.filter(x => !this.rootItemset.items.includes(x));
+                if (itemIds.length === 1){
+                    /// Single item
+                    return this.getItem(itemIds[0]).label;
+                }else if(itemIds.length === 0){
+                    /// Root item
+                    let items = this.resolveItemIds(this.rootItemset.items);
+                    let labels = items.map(x => x.label);
+                    return labels.join(", ");
+                }
+            }.bind(this))
     }
 
     calculateItemAngles() {
@@ -452,17 +464,22 @@ class Circular {
         // set angles for visible items
         let index = 0;
         this.items.forEach(function (item) {
-            if (this.selectedItemIds.includes(item.id)){
+            if (this.selectedItemIds.length === 1 && item === this.selectedItemIds[0]) {
+                item.startAngle = - Math.PI;
+                item.midAngle = 0;
+                item.endAngle = Math.PI;
+                index++;
+            }else if (this.selectedItemIds.includes(item.id)){
                 // if rendered, set angle
                 item.startAngle = offset + index * baseAngle;
                 item.endAngle = offset + (index + 1) * baseAngle;
                 item.midAngle = offset + (index + 0.5) * baseAngle;
                 index++;
             }else{
-                // if not rendered, set to 0
-                item.startAngle = 0;
-                item.midAngle = 0;
-                item.endAngle = 0;
+                // if not rendered, set to the bottom (-pi)
+                item.startAngle = -Math.PI;
+                item.midAngle = -Math.PI;
+                item.endAngle = -Math.PI;
             }
         }, this);
     }
@@ -479,7 +496,7 @@ class Circular {
 
         function hideSet(set){
             if(set.startAngle == null){
-                set.startAngle = 0;
+                set.startAngle = - Math.PI;
             }
             set.endAngle = set.startAngle;
         }
@@ -568,6 +585,17 @@ class MainCircular extends Circular{
         this.rootItemset = {"items": [], "support": 1};
         this.selectedItemIds = this.items.map(x => x.id);
     }
+
+    itemClick(selected) {
+        this.rootItemset = selected;
+        this.contextCircle.selectedItemIds = selected.items;
+        this.updateAll();
+    }
+
+    itemsetClick(selected) {
+        this.selectedItemIds = selected.items;
+        this.updateAll()
+    }
 }
 
 class ContextCircular extends Circular{
@@ -584,6 +612,17 @@ class ContextCircular extends Circular{
     reset(){
         this.selectedItemIds = [];
     }
+
+    itemClick(selected) {
+        // Do nothing
+    }
+
+    itemsetClick(selected) {
+        this.selectedItemIds = selected.items;
+        this.mainCircle.rootItemset = selected;
+        this.updateAll()
+    }
+
 }
 
 
