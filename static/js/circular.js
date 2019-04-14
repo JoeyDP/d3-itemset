@@ -373,6 +373,7 @@ class Circular {
         this.arcs.push(this.itemsetLabelArcs);
 
         this.itemsetLabels = itemsetGroups.append("text")
+            .style("cursor", "pointer")
             .style("display", function(d){return d.startAngle === d.endAngle ? "none":"inline";})
             .each(function (d) {
 	            this._current = copy(d);
@@ -675,7 +676,8 @@ class ContextCircular extends Circular{
     }
 
     itemClick(selected) {
-        // Do nothing
+        // same as select itemset (go back).
+        this.itemsetClick(selected);
     }
 
     itemsetClick(selected) {
